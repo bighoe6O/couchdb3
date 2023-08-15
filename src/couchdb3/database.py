@@ -732,6 +732,7 @@ class Database(Base):
             *,
             content: Any = None,
             rev: str = None,
+            content_type: str = None
     ) -> Tuple[str, bool, str]:
         """
         Uploads the supplied content as an attachment to the specified document.
@@ -762,7 +763,8 @@ class Database(Base):
         """
         if (not content and not path) or (content and path):
             raise ValueError("Precisely one of the arguments \"attdata\" and  \"attloc\" must be provided.")
-        content_type = content_type_getter(data=content, file_name=path)
+        if content_type is None:
+            content_type = content_type_getter(data=content, file_name=path)
         resource = f"{docid}/{attname}"
         query_kwargs = {"rev": rev}
         req_kwargs = {
@@ -781,15 +783,29 @@ class Database(Base):
                     }
                 )
         else:
-            req_kwargs.update({"body": content})
-            response = self._put(
-                resource=resource,
-                query_kwargs=query_kwargs,
-                body=content,
-                headers={
-                    "content-type": content_type
-                }
-            )
+            if content_type == 'text/plain':
+                req_kwargs.update({"body": content})
+                response = self._put(
+                    resource=resource,
+                    query_kwargs=query_kwargs,
+                    body=content,
+                    headers={
+                        "content-type": content_type
+                    }
+                )
+            else:
+                import io
+                
+                # TODO: data may need a stream
+                response = self._put(
+                    resource=resource,
+                    query_kwargs=query_kwargs,
+                    data=io.BytesIO(content),
+                    # data=content,
+                    headers={
+                        "content-type": content_type
+                    }
+                )
         data = response.json()
         return data["id"], data["ok"], data["rev"]
 
